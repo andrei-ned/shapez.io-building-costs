@@ -277,7 +277,9 @@ class Mod extends shapez.Mod {
         // Show cost of all elements in blueprint placer HUD
         this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "onBlueprintChanged", function($original, [blueprint]) {
             $original(blueprint);
+            const pinnedShapes = this.root.hud.parts.pinnedShapes;
             if (!blueprint) {
+                pinnedShapes.rerenderFull();
                 return;
             }
             if (!blueprint.entities) {
@@ -301,6 +303,16 @@ class Mod extends shapez.Mod {
                 const costDisplayText = shapez.makeDiv(costContainer, null, classes, "");
                 costDisplayText.innerText = "" + cost;
                 costContainer.appendChild(canvas);
+            }
+
+            // Pin shapes in blueprint
+            pinnedShapes.rerenderFull();
+            for (let key in costs) {
+                pinnedShapes.internalPinShape({
+                    key: key,
+                    canUnpin: false,
+                    className: "currency",
+                });
             }
         });
 
