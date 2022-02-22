@@ -10,7 +10,6 @@ const METADATA = {
     doesNotAffectSavegame: true,
 };
 
-// TODO: proper cost tooltips
 // TODO: bump up prices
 
 buildingCosts = {};
@@ -25,6 +24,17 @@ function getBuildingIdFromEntity(entity) {
     return getBuildingIdString(buildingData.metaInstance, buildingData.variant);
 }
 
+function addBuildingCostsEntry(building, variant, level) {
+    const id = getBuildingIdString(building, variant);
+    let costAmount = (
+        level.throughputOnly ?
+        shapez.findNiceIntegerValue(level.required * 50) :
+        shapez.findNiceIntegerValue(level.required * 0.1)
+    )
+    costAmount = shapez.findNiceIntegerValue(Math.pow(costAmount, 1.1));
+    buildingCosts[id] = { shape: level.shape, amount: costAmount };
+}
+
 const BlueprintPlacerExtension = ({ $super, $old }) => ({
     getCostDict() {
         const currentBlueprint = this.currentBlueprint.get();
@@ -33,12 +43,16 @@ const BlueprintPlacerExtension = ({ $super, $old }) => ({
             const entity = currentBlueprint.entities[i];
             const id = getBuildingIdFromEntity(entity);
             if (id in buildingCosts) {
-                const shapeCost = buildingCosts[id];
-                if (!(shapeCost in costs)) {
-                    costs[shapeCost] = 0;
+                const shapeKey = buildingCosts[id].shape;
+                const shapeAmount = buildingCosts[id].amount;
+                if (!(shapeKey in costs)) {
+                    costs[shapeKey] = 0;
                 }
-                costs[shapeCost]++;
+                costs[shapeKey] += shapeAmount;
             }
+        }
+        for (let key in costs) {
+            costs[key] = shapez.findNiceIntegerValue(Math.pow(costs[key], 1.1));
         }
         return costs;
     },
@@ -54,32 +68,25 @@ class Mod extends shapez.Mod {
             for (let i = 0; i < levels.length; i++) {
                 const lvl = levels[i];
                 const contentUnlocked = shapez.enumHubGoalRewardsToContentUnlocked[lvl.reward];
-                let id;
                 if (contentUnlocked) {
                     contentUnlocked.forEach(([metaBuildingClass, variant]) => {
                         const metaBuilding = shapez.gMetaBuildingRegistry.findByClass(metaBuildingClass);
-                        id = getBuildingIdString(metaBuilding, variant);
-                        buildingCosts[id] = lvl.shape;
+                        addBuildingCostsEntry(metaBuilding, variant, lvl);
                     });
                 }
 
                 // Handle edge cases which don't get a cost for any variant
                 switch(lvl.reward) {
                     case shapez.enumHubGoalRewards.reward_cutter_and_trash:
-                        id = getBuildingIdString(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTrashBuilding), "default");
-                        buildingCosts[id] = lvl.shape;
+                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTrashBuilding), "default", lvl);
                         break;
                     case shapez.enumHubGoalRewards.reward_virtual_processing:
-                        id = getBuildingIdString(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaVirtualProcessorBuilding), "default");
-                        buildingCosts[id] = lvl.shape;
-                        id = getBuildingIdString(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaAnalyzerBuilding), "default");
-                        buildingCosts[id] = lvl.shape;
-                        id = getBuildingIdString(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaComparatorBuilding), "default");
-                        buildingCosts[id] = lvl.shape;
+                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaVirtualProcessorBuilding), "default", lvl);
+                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaAnalyzerBuilding), "default", lvl);
+                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaComparatorBuilding), "default", lvl);
                         break;
                     case shapez.enumHubGoalRewards.reward_logic_gates:
-                        id = getBuildingIdString(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTransistorBuilding), "default");
-                        buildingCosts[id] = lvl.shape;
+                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTransistorBuilding), "default", lvl);
                         break;
                 }
             }
@@ -124,7 +131,7 @@ class Mod extends shapez.Mod {
                 const id = getBuildingIdString(metaBuilding, variant);
                 if (id in buildingCosts) {
                     this.internalPinShape({
-                        key: buildingCosts[id],
+                        key: buildingCosts[id].shape,
                         canUnpin: false,
                         className: "currency",
                     });
@@ -173,6 +180,10 @@ class Mod extends shapez.Mod {
                     margin-left: 0;
                 }
 
+                .costContainer {
+                    margin-left: $scaled(12px);
+                }
+
                 .canAfford {
                     color: white;
                 }
@@ -191,13 +202,13 @@ class Mod extends shapez.Mod {
             const variant = this.currentVariant.get();
             const id = getBuildingIdString(metaBuilding, variant);
             if (id in buildingCosts) {
-                const shapeKey = buildingCosts[id];
+                const shapeKey = buildingCosts[id].shape;
                 const definition = this.root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
                 const canvas = definition.generateAsCanvas(35);
                 // TODO: display amount of shapes once implemented
                 this.buildingInfoElements.additionalInfo.innerHTML += `
                 <label>Cost:</label>
-                <span id='shapeCost'></span>
+                <span id='shapeCost'>${buildingCosts[id].amount}</span>
                 `;
                 const canvasContainer = shapez.makeDiv(this.element.querySelector("#shapeCost"), null, ["shape"]);
                 canvasContainer.appendChild(canvas);
@@ -212,9 +223,9 @@ class Mod extends shapez.Mod {
             const old = $original(entity, options);
             const id = getBuildingIdFromEntity(entity);
             if (id in buildingCosts) {
-                const shapeCost = buildingCosts[id];
-                const storedInHub = this.root.hubGoals.storedShapes[shapeCost] || 0;
-                if (storedInHub < 1) {
+                const shapeKey = buildingCosts[id].shape;
+                const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
+                if (storedInHub < buildingCosts[id].amount) {
                     return false;
                 }
             }
@@ -226,18 +237,18 @@ class Mod extends shapez.Mod {
             const result = $original(...args);
             const id = getBuildingIdString(args[0].building, args[0].variant);
             if (id in buildingCosts) {
-                const shapeCost = buildingCosts[id];
-                const storedInHub = this.root.hubGoals.storedShapes[shapeCost] || 0;
-                if (storedInHub < 1) {
+                const shapeKey = buildingCosts[id].shape;
+                const shapeAmount = buildingCosts[id].amount;
+                const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
+                if (storedInHub < shapeAmount) {
                     // Play sound when can't afford
                     this.root.soundProxy.playUi(shapez.SOUNDS.uiError);
                     return null;
                 }
                 if (result) {
-                    this.root.hubGoals.storedShapes[shapeCost]--;
+                    this.root.hubGoals.storedShapes[shapeKey] -= shapeAmount;
                 }
             }
-
             return result;
         });
 
@@ -252,7 +263,7 @@ class Mod extends shapez.Mod {
             if (!oldCanAfford) {
                 return;
             }
-            const newCanAfford = true;
+            let newCanAfford = true;
             const costs = this.getCostDict();
             for (let [shapeKey, cost] of Object.entries(costs)) {
                 const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
