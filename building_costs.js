@@ -1,6 +1,6 @@
 // @ts-nocheck
 const METADATA = {
-    website: "https://twitter.com/Darn_yo",
+    website: "https://github.com/andrei-ned/shapez.io-building-costs",
     author: "Darn",
     name: "Consumable buildings",
     version: "1",
@@ -14,9 +14,6 @@ const METADATA = {
 // TODO: bump up prices
 
 buildingCosts = {};
-buildingPlacerCostUI = "";
-selectedBuilding = "";
-selectedBuildingVariant = "";
 
 function getBuildingIdString(building, variant) {
     return building.id + "_" + variant;
@@ -101,7 +98,6 @@ class Mod extends shapez.Mod {
                             const prevV = variants[j].variant;
                             const prevId = getBuildingIdString(entry, prevV);
                             if (prevId in buildingCosts) {
-                                console.log("added with cost " + buildingCosts[prevId]);
                                 buildingCosts[id] = buildingCosts[prevId];
                                 break;
                             }
@@ -109,13 +105,7 @@ class Mod extends shapez.Mod {
                     }
                 }
             }
-
-            // Set up building cost UI div
-            buildingPlacerCostUI = shapez.makeDiv(this.root.hud.parts.buildingPlacer.element, null, ["shape"]);
         });
-
-        // Define our currency
-        const CURRENCY = "CuCuCuCu";
 
         // Pin shape cost of active building variant
         this.modInterface.runAfterMethod(shapez.HUDBuildingPlacer, "initialize", function() {
@@ -186,35 +176,33 @@ class Mod extends shapez.Mod {
                 .canAfford {
                     color: white;
                 }
+
+                #shapeCost {
+                    display: flex;
+                }
             `);
 
-        // Display shape cost of each building
-        for (const entry of shapez.gMetaBuildingRegistry.entries) {
-            const metaclass = entry.constructor;
-            console.log(metaclass);
-            this.modInterface.replaceMethod(metaclass, "getAdditionalStatistics", function (
-                $original,
-                [root, variant]
-            ) {
-                const oldStats = $original(root, variant);
-                const id = getBuildingIdString(entry, variant);
-
-                while (buildingPlacerCostUI.firstChild) {
-                    buildingPlacerCostUI.firstChild.remove();
-                }
-
-                if (id in buildingCosts) {
-                    const shapeKey = buildingCosts[id];
-                    const definition = root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
-                    const canvas = definition.generateAsCanvas(40);
-                    while (buildingPlacerCostUI.firstChild) {
-                        buildingPlacerCostUI.firstChild.remove();
-                    }
-                    buildingPlacerCostUI.appendChild(canvas);
-                }
-                return oldStats;
-            });
-        }
+        // Display shape cost in building placer HUD
+        this.modInterface.runAfterMethod(shapez.HUDBuildingPlacer, "rerenderInfoDialog", function() {
+            const metaBuilding = this.currentMetaBuilding.get();
+            if (!metaBuilding) {
+                return;
+            }
+            const variant = this.currentVariant.get();
+            const id = getBuildingIdString(metaBuilding, variant);
+            if (id in buildingCosts) {
+                const shapeKey = buildingCosts[id];
+                const definition = this.root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
+                const canvas = definition.generateAsCanvas(35);
+                // TODO: display amount of shapes once implemented
+                this.buildingInfoElements.additionalInfo.innerHTML += `
+                <label>Cost:</label>
+                <span id='shapeCost'></span>
+                `;
+                const canvasContainer = shapez.makeDiv(this.element.querySelector("#shapeCost"), null, ["shape"]);
+                canvasContainer.appendChild(canvas);
+            }
+        });
 
         // Only allow placing an entity when there is enough currency
         this.modInterface.replaceMethod(shapez.GameLogic, "checkCanPlaceEntity", function (
@@ -275,7 +263,7 @@ class Mod extends shapez.Mod {
             this.trackedCanAfford.set(oldCanAfford && newCanAfford)
         });
 
-        // Show cost of all elements in blueprint placer hud
+        // Show cost of all elements in blueprint placer HUD
         this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "onBlueprintChanged", function($original, [blueprint]) {
             $original(blueprint);
             if (!blueprint) {
