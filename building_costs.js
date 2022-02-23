@@ -10,8 +10,6 @@ const METADATA = {
     doesNotAffectSavegame: true,
 };
 
-// TODO: bump up prices
-
 buildingCosts = {};
 
 function getBuildingIdString(building, variant) {
