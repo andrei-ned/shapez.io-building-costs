@@ -12,4 +12,5 @@ Belts, Miners, and Wires are always free.
 
 ## Useful Links
 Shapez.io repo: https://github.com/tobspr/shapez.io
+
 Mod page: https://shapez.mod.io/building-costs
