@@ -243,6 +243,11 @@ class Mod extends shapez.Mod {
                 if (storedInHub < shapeAmount) {
                     // Play sound when can't afford
                     this.root.soundProxy.playUi(shapez.SOUNDS.uiError);
+                    // Alternative: show popup dialog
+                    // this.root.hud.parts.dialogs.showWarning(
+                    //     "Can't afford building",
+                    //     "Not enough shapes to pay for building. Collect more of the required shape."
+                    // );
                     return null;
                 }
                 if (result) {
@@ -323,6 +328,47 @@ class Mod extends shapez.Mod {
                 variants.push(shapez.enumMinerVariants.chainable);
             }
             return variants;
+        });
+
+        // Show costs in unlock screen
+        this.modInterface.replaceMethod(shapez.HUDUnlockNotification, "showForLevel", function($original, [level, reward]) {
+            $original(level, reward);
+            let hasBuilding = false;
+            let metaBuilding = null;
+            let buildingVariant = "default";
+            const contentUnlocked = shapez.enumHubGoalRewardsToContentUnlocked[reward];
+            if (contentUnlocked) {
+                contentUnlocked.forEach(([metaBuildingClass, variant]) => {
+                    metaBuilding = shapez.gMetaBuildingRegistry.findByClass(metaBuildingClass);
+                    hasBuilding = true;
+                    buildingVariant = variant;
+                });
+            }
+            // Handle edge cases
+            switch (level) {
+                case shapez.enumHubGoalRewards.reward_virtual_processing:
+                    metaBuilding = shapez.gMetaBuildingRegistry.findByClass(shapez.MetaVirtualProcessorBuilding);
+                    hasBuilding = true;
+                    break;
+                case shapez.enumHubGoalRewards.reward_logic_gates:
+                    metaBuilding = shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTransistorBuilding);
+                    hasBuilding = true;
+                    break;
+            }
+
+            if (!hasBuilding) {
+                return;
+            }
+
+            const id = getBuildingIdString(metaBuilding, buildingVariant);
+            const shapeKey = buildingCosts[id].shape;
+            const shapeAmount = buildingCosts[id].amount;
+            const rewardDescElement = this.element.querySelector(".rewardDesc");
+            const costDiv = shapez.makeDiv(rewardDescElement, null, [], `Buildings cost ${shapeAmount} <span></span> to place.`);
+            const canvasHolder = costDiv.querySelector("span");
+            const definition = this.root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
+            const canvas = definition.generateAsCanvas(35);
+            canvasHolder.appendChild(canvas);
         });
     }
 }
