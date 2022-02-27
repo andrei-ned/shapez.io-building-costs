@@ -33,33 +33,28 @@ function addBuildingCostsEntry(building, variant, level) {
     buildingCosts[id] = { shape: level.shape, amount: costAmount };
 }
 
-const BlueprintPlacerExtension = ({ $super, $old }) => ({
-    getCostDict() {
-        const currentBlueprint = this.currentBlueprint.get();
-        let costs = {};
-        for (let i = 0; i < currentBlueprint.entities.length; ++i) {
-            const entity = currentBlueprint.entities[i];
-            const id = getBuildingIdFromEntity(entity);
-            if (id in buildingCosts) {
-                const shapeKey = buildingCosts[id].shape;
-                const shapeAmount = buildingCosts[id].amount;
-                if (!(shapeKey in costs)) {
-                    costs[shapeKey] = 0;
-                }
-                costs[shapeKey] += shapeAmount;
+function getCostDict(blueprint) {
+    let costs = {};
+    for (let i = 0; i < blueprint.entities.length; ++i) {
+        const entity = blueprint.entities[i];
+        const id = getBuildingIdFromEntity(entity);
+        if (id in buildingCosts) {
+            const shapeKey = buildingCosts[id].shape;
+            const shapeAmount = buildingCosts[id].amount;
+            if (!(shapeKey in costs)) {
+                costs[shapeKey] = 0;
             }
+            costs[shapeKey] += shapeAmount;
         }
-        for (let key in costs) {
-            costs[key] = shapez.findNiceIntegerValue(Math.pow(costs[key], 1.1));
-        }
-        return costs;
-    },
-});
+    }
+    for (let key in costs) {
+        costs[key] = shapez.findNiceIntegerValue(Math.pow(costs[key], 1.1));
+    }
+    return costs;
+}
 
 class Mod extends shapez.Mod {
     init() {
-        this.modInterface.extendClass(shapez.HUDBlueprintPlacer, BlueprintPlacerExtension);
-
         this.modInterface.runAfterMethod(shapez.GameCore, "initializeRoot", function() {
             // Get shape costs from level
             const levels = this.root.gameMode.getLevelDefinitions();
@@ -255,6 +250,16 @@ class Mod extends shapez.Mod {
             return result;
         });
 
+        // Take shapes when placing blueprint
+        this.modInterface.replaceMethod(shapez.Blueprint, "tryPlace", function($original, [root, tile]) {
+            if ($original(root, tile)) {
+                const costs = getCostDict(this);
+                for (let [shapeKey, cost] of Object.entries(costs)) {
+                    root.hubGoals.storedShapes[shapeKey] -= cost;
+                }
+            }
+        });
+
         // Update can afford of blueprint
         this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "update", function($original) {
             $original();
@@ -267,7 +272,7 @@ class Mod extends shapez.Mod {
                 return;
             }
             let newCanAfford = true;
-            const costs = this.getCostDict();
+            const costs = getCostDict(this.currentBlueprint.get());
             for (let [shapeKey, cost] of Object.entries(costs)) {
                 const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
                 if (cost > storedInHub) {
@@ -289,7 +294,7 @@ class Mod extends shapez.Mod {
                 return;
             }
 
-            const costs = this.getCostDict();
+            const costs = getCostDict(this.currentBlueprint.get());
             while (this.costDisplayParent.childElementCount > 2) {
                 this.costDisplayParent.lastChild.remove();
             }
