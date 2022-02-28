@@ -34,6 +34,7 @@ function addBuildingCostsEntry(building, variant, level) {
 }
 
 function getCostDict(blueprint) {
+    console.log("computing cost dict");
     let costs = {};
     for (let i = 0; i < blueprint.entities.length; ++i) {
         const entity = blueprint.entities[i];
@@ -55,6 +56,8 @@ function getCostDict(blueprint) {
 
 class Mod extends shapez.Mod {
     init() {
+        // this.modInterface.extendClass(shapez.Blueprint, BlueprintExtension);
+
         this.modInterface.runAfterMethod(shapez.GameCore, "initializeRoot", function() {
             // Get shape costs from level
             const levels = this.root.gameMode.getLevelDefinitions();
@@ -249,7 +252,26 @@ class Mod extends shapez.Mod {
             }
             return result;
         });
-
+        // Compute cost dict in constructor
+        // this.modInterface.runAfterMethod(shapez.Blueprint, "constructor", function() {
+        //     console.log("computing cost dict");
+        //     blueprint.costs = {};
+        //     for (let i = 0; i < blueprint.entities.length; ++i) {
+        //         const entity = blueprint.entities[i];
+        //         const id = getBuildingIdFromEntity(entity);
+        //         if (id in buildingCosts) {
+        //             const shapeKey = buildingCosts[id].shape;
+        //             const shapeAmount = buildingCosts[id].amount;
+        //             if (!(shapeKey in costs)) {
+        //                 blueprint.costs[shapeKey] = 0;
+        //             }
+        //             blueprint.costs[shapeKey] += shapeAmount;
+        //         }
+        //     }
+        //     for (let key in blueprint.costs) {
+        //         blueprint.costs[key] = shapez.findNiceIntegerValue(Math.pow(costs[key], 1.1));
+        //     }
+        // });
         // Take shapes when placing blueprint
         this.modInterface.replaceMethod(shapez.Blueprint, "tryPlace", function($original, [root, tile]) {
             if ($original(root, tile)) {
@@ -260,30 +282,44 @@ class Mod extends shapez.Mod {
             }
         });
 
-        // Update can afford of blueprint
-        this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "update", function($original) {
-            $original();
-            const currentBlueprint = this.currentBlueprint.get();
-            if (!currentBlueprint) {
-                return;
-            }
-            const oldCanAfford = this.trackedCanAfford.get();
-            if (!oldCanAfford) {
-                return;
-            }
+        // Update can afford
+        this.modInterface.replaceMethod(shapez.Blueprint, "canAfford", function($original, [root]) {
+            const oldCanAfford = $original(root);
             let newCanAfford = true;
-            const costs = getCostDict(this.currentBlueprint.get());
+            const costs = getCostDict(this);
             for (let [shapeKey, cost] of Object.entries(costs)) {
-                const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
+                const storedInHub = root.hubGoals.storedShapes[shapeKey] || 0;
                 if (cost > storedInHub) {
                     newCanAfford = false;
                 }
             }
-            this.trackedCanAfford.set(oldCanAfford && newCanAfford)
+            return oldCanAfford && newCanAfford;
         });
+        // this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "update", function($original) {
+        //     $original();
+        //     const currentBlueprint = this.currentBlueprint.get();
+        //     if (!currentBlueprint) {
+        //         return;
+        //     }
+        //     const oldCanAfford = this.trackedCanAfford.get();
+        //     if (!oldCanAfford) {
+        //         return;
+        //     }
+        //     let newCanAfford = true;
+        //     const costs = getCostDict(this.currentBlueprint.get());
+        //     for (let [shapeKey, cost] of Object.entries(costs)) {
+        //         const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
+        //         if (cost > storedInHub) {
+        //             newCanAfford = false;
+        //         }
+        //     }
+        //     this.trackedCanAfford.set(oldCanAfford && newCanAfford)
+        // });
 
         // Show cost of all elements in blueprint placer HUD
         this.modInterface.replaceMethod(shapez.HUDBlueprintPlacer, "onBlueprintChanged", function($original, [blueprint]) {
+            console.log("onBlueprintChanged");
+            console.log(blueprint);
             $original(blueprint);
             const pinnedShapes = this.root.hud.parts.pinnedShapes;
             if (!blueprint) {
@@ -294,16 +330,19 @@ class Mod extends shapez.Mod {
                 return;
             }
 
-            const costs = getCostDict(this.currentBlueprint.get());
+            const costs = getCostDict(blueprint);
             while (this.costDisplayParent.childElementCount > 2) {
                 this.costDisplayParent.lastChild.remove();
             }
+            const canAffordBlueprint = this.root.hubGoals.getShapesStoredByKey(this.root.gameMode.getBlueprintShapeKey()) >= blueprint.getCost();
+            // this.costDisplayParent.querySelector(".costText").classList.toggle("canAfford", canAffordBlueprint);
+            this.costDisplayText.classList.toggle("canAfford", canAffordBlueprint);
 
             for (let [shapeKey, cost] of Object.entries(costs)) {
                 const definition = this.root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
                 const canvas = definition.generateAsCanvas(80);
                 const classes = ["costText"];
-                const storedInHub = this.root.hubGoals.storedShapes[shapeKey] || 0;
+                const storedInHub = this.root.hubGoals.getShapesStoredByKey(shapeKey);
                 if (cost <= storedInHub) {
                     classes.push("canAfford");
                 }
@@ -321,6 +360,30 @@ class Mod extends shapez.Mod {
                     canUnpin: false,
                     className: "currency",
                 });
+            }
+        });
+        this.modInterface.runAfterMethod(shapez.HUDBlueprintPlacer, "onCanAffordChanged", function() {
+            const blueprint = this.currentBlueprint.get();
+            console.log("onCanAffordChanged")
+            console.log(blueprint);
+            if (!blueprint) {
+                return;
+            }
+            if (!blueprint.entities) {
+                return;
+            }
+            const elements = this.costDisplayParent.querySelectorAll(".costText");
+            console.log(elements);
+            const costs = getCostDict(blueprint);
+            const canAffordBlueprint = this.root.hubGoals.getShapesStoredByKey(this.root.gameMode.getBlueprintShapeKey()) >= blueprint.getCost();
+            console.log(this.costDisplayText);
+            this.costDisplayText.classList.toggle("canAfford", canAffordBlueprint);
+            let index = 1;
+            for (let [shapeKey, cost] of Object.entries(costs)) {
+                console.log(elements[index]);
+                const storedInHub = this.root.hubGoals.getShapesStoredByKey(shapeKey);
+                elements[index].classList.toggle("canAfford", storedInHub >= cost);
+                index++;
             }
         });
 
