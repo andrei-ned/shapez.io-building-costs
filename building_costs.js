@@ -2,9 +2,9 @@
 const METADATA = {
     website: "https://github.com/andrei-ned/shapez.io-building-costs",
     author: "Darn",
-    name: "Consumable buildings",
+    name: "Building Costs",
     version: "1",
-    id: "consumable_buildings",
+    id: "building_costs",
     description: "Makes each building cost a shape, based on the hub goals.",
     minimumGameVersion: ">=1.5.0",
     doesNotAffectSavegame: true,
@@ -54,55 +54,44 @@ function getCostDict(blueprint) {
     return costs;
 }
 
+class MockHubGoals {
+    constructor(realHubGoals) {
+        Object.assign(this, realHubGoals);
+        this.unlockedRewards = new Set();
+    }
+
+    isRewardUnlocked(reward) {
+        return this.unlockedRewards.has(reward);
+    }
+
+    unlockReward(reward) {
+        this.unlockedRewards.add(reward);
+    }
+}
+class MockRoot {
+    constructor(realRoot) {
+        Object.assign(this, realRoot);
+        this.hubGoals = new MockHubGoals(realRoot.hubGoals);
+    }
+}
+
 class Mod extends shapez.Mod {
     init() {
-        // this.modInterface.extendClass(shapez.Blueprint, BlueprintExtension);
-
         this.modInterface.runAfterMethod(shapez.GameCore, "initializeRoot", function() {
-            // Get shape costs from level
+            // Get shape costs from levels
             const levels = this.root.gameMode.getLevelDefinitions();
+            const mock = new MockRoot(this.root);
             for (let i = 0; i < levels.length; i++) {
                 const lvl = levels[i];
-                const contentUnlocked = shapez.enumHubGoalRewardsToContentUnlocked[lvl.reward];
-                if (contentUnlocked) {
-                    contentUnlocked.forEach(([metaBuildingClass, variant]) => {
-                        const metaBuilding = shapez.gMetaBuildingRegistry.findByClass(metaBuildingClass);
-                        addBuildingCostsEntry(metaBuilding, variant, lvl);
-                    });
-                }
-
-                // Handle edge cases which don't get a cost for any variant
-                switch(lvl.reward) {
-                    case shapez.enumHubGoalRewards.reward_cutter_and_trash:
-                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTrashBuilding), "default", lvl);
-                        break;
-                    case shapez.enumHubGoalRewards.reward_virtual_processing:
-                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaVirtualProcessorBuilding), "default", lvl);
-                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaAnalyzerBuilding), "default", lvl);
-                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaComparatorBuilding), "default", lvl);
-                        break;
-                    case shapez.enumHubGoalRewards.reward_logic_gates:
-                        addBuildingCostsEntry(shapez.gMetaBuildingRegistry.findByClass(shapez.MetaTransistorBuilding), "default", lvl);
-                        break;
-                }
-            }
-
-            // Handle variants that didn't get a cost (e.g. mirrored painter, logic gates etc)
-            for (const entry of shapez.gMetaBuildingRegistry.entries) {
-                const metaclass = entry.constructor;
-                const variants = metaclass.getAllVariantCombinations();
-
-                for (let i = 0; i < variants.length; i++) {
-                    const v = variants[i].variant;
-                    const id = getBuildingIdString(entry, v);
-                    if (!(id in buildingCosts)) {
-                        // Check for variant that has cost
-                        for (let j = i-1; j >= 0; j--) {
-                            const prevV = variants[j].variant;
-                            const prevId = getBuildingIdString(entry, prevV);
-                            if (prevId in buildingCosts) {
-                                buildingCosts[id] = buildingCosts[prevId];
-                                break;
+                mock.hubGoals.unlockReward(lvl.reward);
+                // Check every building to see if now unlocked
+                for (const entry of shapez.gMetaBuildingRegistry.entries) {
+                    const instance = new entry.constructor();
+                    if (instance.getIsUnlocked(mock)) {
+                        for (const [variantIndex, variant] of Object.entries(instance.getAvailableVariants(mock))) {
+                            const id = getBuildingIdString(instance, variant);
+                            if (!(id in buildingCosts)) {
+                                addBuildingCostsEntry(instance, variant, lvl);
                             }
                         }
                     }
