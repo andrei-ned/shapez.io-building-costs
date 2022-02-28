@@ -11,6 +11,7 @@ const METADATA = {
 };
 
 buildingCosts = {};
+blueprintCosts = {}
 
 function getBuildingIdString(building, variant) {
     return building.id + "_" + variant;
@@ -275,8 +276,8 @@ class Mod extends shapez.Mod {
         // Take shapes when placing blueprint
         this.modInterface.replaceMethod(shapez.Blueprint, "tryPlace", function($original, [root, tile]) {
             if ($original(root, tile)) {
-                const costs = getCostDict(this);
-                for (let [shapeKey, cost] of Object.entries(costs)) {
+                // const costs = getCostDict(this);
+                for (let [shapeKey, cost] of Object.entries(blueprintCosts)) {
                     root.hubGoals.storedShapes[shapeKey] -= cost;
                 }
             }
@@ -286,8 +287,8 @@ class Mod extends shapez.Mod {
         this.modInterface.replaceMethod(shapez.Blueprint, "canAfford", function($original, [root]) {
             const oldCanAfford = $original(root);
             let newCanAfford = true;
-            const costs = getCostDict(this);
-            for (let [shapeKey, cost] of Object.entries(costs)) {
+            // const costs = getCostDict(this);
+            for (let [shapeKey, cost] of Object.entries(blueprintCosts)) {
                 const storedInHub = root.hubGoals.storedShapes[shapeKey] || 0;
                 if (cost > storedInHub) {
                     newCanAfford = false;
@@ -330,7 +331,7 @@ class Mod extends shapez.Mod {
                 return;
             }
 
-            const costs = getCostDict(blueprint);
+            blueprintCosts = getCostDict(blueprint);
             while (this.costDisplayParent.childElementCount > 2) {
                 this.costDisplayParent.lastChild.remove();
             }
@@ -338,7 +339,7 @@ class Mod extends shapez.Mod {
             // this.costDisplayParent.querySelector(".costText").classList.toggle("canAfford", canAffordBlueprint);
             this.costDisplayText.classList.toggle("canAfford", canAffordBlueprint);
 
-            for (let [shapeKey, cost] of Object.entries(costs)) {
+            for (let [shapeKey, cost] of Object.entries(blueprintCosts)) {
                 const definition = this.root.shapeDefinitionMgr.getShapeFromShortKey(shapeKey);
                 const canvas = definition.generateAsCanvas(80);
                 const classes = ["costText"];
@@ -354,7 +355,7 @@ class Mod extends shapez.Mod {
 
             // Pin shapes in blueprint
             pinnedShapes.rerenderFull();
-            for (let key in costs) {
+            for (let key in blueprintCosts) {
                 pinnedShapes.internalPinShape({
                     key: key,
                     canUnpin: false,
@@ -374,12 +375,12 @@ class Mod extends shapez.Mod {
             }
             const elements = this.costDisplayParent.querySelectorAll(".costText");
             console.log(elements);
-            const costs = getCostDict(blueprint);
+            // const costs = getCostDict(blueprint);
             const canAffordBlueprint = this.root.hubGoals.getShapesStoredByKey(this.root.gameMode.getBlueprintShapeKey()) >= blueprint.getCost();
             console.log(this.costDisplayText);
             this.costDisplayText.classList.toggle("canAfford", canAffordBlueprint);
             let index = 1;
-            for (let [shapeKey, cost] of Object.entries(costs)) {
+            for (let [shapeKey, cost] of Object.entries(blueprintCosts)) {
                 console.log(elements[index]);
                 const storedInHub = this.root.hubGoals.getShapesStoredByKey(shapeKey);
                 elements[index].classList.toggle("canAfford", storedInHub >= cost);
