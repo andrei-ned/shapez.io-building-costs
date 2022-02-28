@@ -3,7 +3,7 @@ const METADATA = {
     website: "https://github.com/andrei-ned/shapez.io-building-costs",
     author: "Darn",
     name: "Building Costs",
-    version: "1",
+    version: "1.0.3",
     id: "building_costs",
     description: "Makes each building cost a shape, based on the hub goals.",
     minimumGameVersion: ">=1.5.0",
@@ -11,7 +11,13 @@ const METADATA = {
 };
 
 buildingCosts = {};
-blueprintCosts = {}
+blueprintCosts = {};
+freeBuildings = [
+    "belt_default",
+    "miner_default",
+    "wire_default",
+    "wire_second",
+];
 
 function getBuildingIdString(building, variant) {
     return building.id + "_" + variant;
@@ -30,7 +36,7 @@ function addBuildingCostsEntry(building, variant, level) {
         shapez.findNiceIntegerValue(level.required * 50) :
         shapez.findNiceIntegerValue(level.required * 0.1)
     )
-    costAmount = shapez.findNiceIntegerValue(Math.pow(costAmount, 1.1));
+    costAmount = shapez.findNiceIntegerValue(Math.pow(costAmount, 1.075));
     buildingCosts[id] = { shape: level.shape, amount: costAmount };
 }
 
@@ -90,13 +96,14 @@ class Mod extends shapez.Mod {
                     if (instance.getIsUnlocked(mock)) {
                         for (const [variantIndex, variant] of Object.entries(instance.getAvailableVariants(mock))) {
                             const id = getBuildingIdString(instance, variant);
-                            if (!(id in buildingCosts)) {
+                            if (!(id in buildingCosts || freeBuildings.includes(id))) {
                                 addBuildingCostsEntry(instance, variant, lvl);
                             }
                         }
                     }
                 }
             }
+            // console.log(buildingCosts);
         });
 
         // Pin shape cost of active building variant
