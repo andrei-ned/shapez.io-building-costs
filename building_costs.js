@@ -3,11 +3,12 @@ const METADATA = {
     website: "https://github.com/andrei-ned/shapez.io-building-costs",
     author: "Darn",
     name: "Building Costs",
-    version: "1.0.3",
+    version: "1.0.4",
     id: "building_costs",
     description: "Makes each building cost a shape, based on the hub goals.",
     minimumGameVersion: ">=1.5.0",
     doesNotAffectSavegame: true,
+    modId: "1842634",
 };
 
 buildingCosts = {};
