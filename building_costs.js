@@ -3,7 +3,7 @@ const METADATA = {
     website: "https://github.com/andrei-ned/shapez.io-building-costs",
     author: "Darn",
     name: "Building Costs",
-    version: "1.0.4",
+    version: "1.0.5",
     id: "building_costs",
     description: "Makes each building cost a shape, based on the hub goals.",
     minimumGameVersion: ">=1.5.0",
@@ -34,10 +34,17 @@ function addBuildingCostsEntry(building, variant, level) {
     const id = getBuildingIdString(building, variant);
     let costAmount = (
         level.throughputOnly ?
-        shapez.findNiceIntegerValue(level.required * 50) :
-        shapez.findNiceIntegerValue(level.required * 0.1)
+        shapez.findNiceIntegerValue(level.required * 200) :
+        shapez.findNiceIntegerValue(level.required * 0.25)
     )
-    costAmount = shapez.findNiceIntegerValue(Math.pow(costAmount, 1.075));
+    costAmount = shapez.findNiceIntegerValue(Math.pow(costAmount, 0.8));
+    costAmount = Math.max(costAmount, 5);
+    if (costAmount > 5 && costAmount < 10) {
+        costAmount = 10;
+    }
+    else if (costAmount > 10 && costAmount < 20) {
+        costAmount = 20;
+    }
     buildingCosts[id] = { shape: level.shape, amount: costAmount };
 }
 
@@ -104,7 +111,7 @@ class Mod extends shapez.Mod {
                     }
                 }
             }
-            // console.log(buildingCosts);
+            console.log(buildingCosts);
         });
 
         // Pin shape cost of active building variant
